@@ -4,13 +4,14 @@ import * as vscode from 'vscode';
 import * as cheerio from 'cheerio';
 import * as hljs from 'highlight.js';
 
-import * as api from './api';
+import * as api from '../api';
 
-import { config, getRpath, doWithProgress, DummyMemento, getRPathConfigEntry } from './util';
-import { HelpPanel } from './rHelpPanel';
-import { HelpProvider, AliasProvider } from './rHelpProvider';
-import { HelpTreeWrapper } from './rHelpTree';
-import { PackageManager } from './rHelpPackages';
+import { config, getRpath, doWithProgress, DummyMemento, getRPathConfigEntry } from '../util';
+import { HelpPanel } from './panel';
+import { IHelpProvider, HelpProvider, IAliasProvider, AliasProvider } from './helpProvider';
+import { HelpProvider as HelpProvider2 } from './helpProvider2';
+import { HelpTreeWrapper } from './treeView';
+import { PackageManager } from './packages';
 
 
 // Initialization function that is called once when activating the extension
@@ -98,6 +99,8 @@ export interface HelpFile {
 	hash?: string;
     // if the file is a real file
 	isRealFile?: boolean;
+	// path of the file if it is a real file
+	filePath?: string;
 	// can be used to scroll the document to a certain position when loading
 	// useful to remember scroll position when going back/forward
 	scrollY?: number;
@@ -147,10 +150,10 @@ export class RHelp implements api.HelpPanel, vscode.WebviewPanelSerializer<strin
 	readonly cwd?: string;
 
 	// Provides the content of help pages:
-	readonly helpProvider: HelpProvider;
+	readonly helpProvider: IHelpProvider;
 
 	// Provides a list of aliases:
-	readonly aliasProvider: AliasProvider;
+	readonly aliasProvider: IAliasProvider;
 
 	// Show/Install/Remove packages:
 	readonly packageManager: PackageManager;
@@ -174,8 +177,9 @@ export class RHelp implements api.HelpPanel, vscode.WebviewPanelSerializer<strin
 	constructor(options: HelpOptions){
 		this.webviewScriptFile = vscode.Uri.file(options.webviewScriptPath);
 		this.webviewStyleFile = vscode.Uri.file(options.webviewStylePath);
-		this.helpProvider = new HelpProvider(options);
-		this.aliasProvider = new AliasProvider(options);
+		const prv = new HelpProvider2(options);
+		this.helpProvider = prv;
+		this.aliasProvider = prv;
 		this.packageManager = new PackageManager({...options, rHelp: this});
 		this.treeViewWrapper = new HelpTreeWrapper(this);
 		this.helpPanelOptions = options;

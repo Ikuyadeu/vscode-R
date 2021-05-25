@@ -1,5 +1,5 @@
 
-import { Memento, window } from 'vscode';
+import * as vscode from 'vscode';
 import * as http from 'http';
 import * as cp from 'child_process';
 import * as kill from 'tree-kill';
@@ -7,23 +7,28 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 
-import * as rHelp from './rHelp';
+import { HelpFile, Alias } from '.';
 
-export interface RHelpProviderOptions {
+export interface IHelpProviderOptions {
 	// path of the R executable
     rPath: string;
 	// directory in which to launch R processes
 	cwd?: string;
 }
 
+export interface IHelpProvider {
+    refresh(): void;
+	getHelpFileFromRequestPath(requestPath: string): Promise<undefined|HelpFile>;
+}
+
 // Class to forward help requests to a backgorund R instance that is running a help server
-export class HelpProvider {
+export class HelpProvider implements IHelpProvider {
     private cp: cp.ChildProcess;
     private port: number|Promise<number>;
     private readonly rPath: string;
     private readonly cwd?: string;
 
-    public constructor(options: RHelpProviderOptions){
+    public constructor(options: IHelpProviderOptions){
         this.rPath = options.rPath || 'R';
         this.cwd = options.cwd;
         this.port = this.launchRHelpServer(); // is a promise for now!
@@ -34,7 +39,7 @@ export class HelpProvider {
         this.port = this.launchRHelpServer();
     }
 
-    public async launchRHelpServer(): Promise<number>{
+    protected async launchRHelpServer(): Promise<number>{
 		const lim = '---vsc---';
 		const re = new RegExp(`.*${lim}(.*)${lim}.*`, 'ms');
 
@@ -75,12 +80,12 @@ export class HelpProvider {
         return port;
     }
 
-	public async getHelpFileFromRequestPath(requestPath: string): Promise<null|rHelp.HelpFile> {
+	public async getHelpFileFromRequestPath(requestPath: string): Promise<undefined|HelpFile> {
         // make sure the server is actually running
         this.port = await this.port;
 
         if(!this.port || typeof this.port !== 'number'){
-            return null;
+            return undefined;
         }
 
         // remove leading '/'
@@ -134,7 +139,7 @@ export class HelpProvider {
         }
 
         // return help file
-        const ret: rHelp.HelpFile = {
+        const ret: HelpFile = {
             requestPath: requestPath,
             html: html,
             isRealFile: false,
@@ -160,7 +165,7 @@ export interface AliasProviderArgs {
 	// getAliases.R
     rScriptFile: string;
     
-    persistentState: Memento;
+    persistentState: vscode.Memento;
 }
 
 interface PackageAliases {
@@ -172,8 +177,14 @@ interface PackageAliases {
     }
 }
 
+export interface IAliasProvider {
+    refresh(): void;
+    getAliasesForName(name: string, pkgName?: string): Alias[] | undefined;
+    getAllAliases(): Alias[] | undefined;
+}
+
 // Implements the aliasProvider required by the help panel
-export class AliasProvider {
+export class AliasProvider implements IAliasProvider {
 
     private readonly rPath: string;
     private readonly cwd?: string;
@@ -181,8 +192,8 @@ export class AliasProvider {
     private allPackageAliases?: null | {
         [key: string]: PackageAliases;
     }
-    private aliases?: null | rHelp.Alias[];
-	private readonly persistentState?: Memento;
+    private aliases?: null | Alias[];
+	private readonly persistentState?: vscode.Memento;
 
     constructor(args: AliasProviderArgs){
         this.rPath = args.rPath;
@@ -199,7 +210,7 @@ export class AliasProvider {
     }
 
     // get all aliases that match the given name, if specified only from 1 package
-    public getAliasesForName(name: string, pkgName?: string): rHelp.Alias[] | null {
+    public getAliasesForName(name: string, pkgName?: string): Alias[] | null {
         const aliases = this.getAliasesForPackage(pkgName);
         if(aliases){
             return aliases.filter((v) => v.name === name);
@@ -209,7 +220,7 @@ export class AliasProvider {
     }
 
     // get a list of all aliases
-    public getAllAliases(): rHelp.Alias[] | null {
+    public getAllAliases(): Alias[] | null {
         if(!this.aliases){
             this.makeAllAliases();
         }
@@ -225,7 +236,7 @@ export class AliasProvider {
     }
 
     // get all aliases provided by one package
-    private getAliasesForPackage(pkgName?: string): rHelp.Alias[] | null {
+    private getAliasesForPackage(pkgName?: string): Alias[] | null {
         if(!pkgName){
             return this.getAllAliases();
         }
@@ -233,7 +244,7 @@ export class AliasProvider {
         if(packageAliases && pkgName in packageAliases){
             const al = packageAliases[pkgName].aliases;
             if(al){
-                const ret: rHelp.Alias[] = [];
+                const ret: Alias[] = [];
                 for(const fncName in al){
                     ret.push({
                         name: fncName,
@@ -253,7 +264,7 @@ export class AliasProvider {
             this.readAliases();
         }
         if(this.allPackageAliases){
-            const ret: rHelp.Alias[] = [];
+            const ret: Alias[] = [];
             for(const pkg in this.allPackageAliases){
                 const pkgName = this.allPackageAliases[pkg].package || pkg;
                 const al = this.allPackageAliases[pkg].aliases;
@@ -303,7 +314,7 @@ export class AliasProvider {
             }
         } catch(e: unknown){
             console.log(e);
-            void window.showErrorMessage((<{message: string}>e).message);
+            void vscode.window.showErrorMessage((<{message: string}>e).message);
         } finally {
             fs.rmdirSync(tempDir, {recursive: true});
         }
