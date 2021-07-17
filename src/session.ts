@@ -354,44 +354,89 @@ export async function getTableHtml(webview: Webview, file: string): Promise<stri
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link href="${String(webview.asWebviewUri(Uri.file(path.join(resDir, 'bootstrap.min.css'))))}" rel="stylesheet">
-  <link href="${String(webview.asWebviewUri(Uri.file(path.join(resDir, 'dataTables.bootstrap4.min.css'))))}" rel="stylesheet">
-  <link href="${String(webview.asWebviewUri(Uri.file(path.join(resDir, 'fixedHeader.jqueryui.min.css'))))}" rel="stylesheet">
-  <style type="text/css">
-    body {
-        color: black;
-        background-color: white;
+  <style media="only screen">
+    html, body {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        box-sizing: border-box;
+        -webkit-overflow-scrolling: touch;
     }
-    table {
-        font-size: 0.75em;
+
+    html {
+        position: absolute;
+        top: 0;
+        left: 0;
+        padding: 0;
+        overflow: auto;
+    }
+
+    body {
+        padding: 0;
+        overflow: auto;
     }
   </style>
-</head>
-<body>
-  <div class="container-fluid">
-    <table id="data-table" class="display table table-sm table-striped table-condensed table-hover"></table>
-  </div>
-  <script src="${String(webview.asWebviewUri(Uri.file(path.join(resDir, 'jquery.min.js'))))}"></script>
-  <script src="${String(webview.asWebviewUri(Uri.file(path.join(resDir, 'jquery.dataTables.min.js'))))}"></script>
-  <script src="${String(webview.asWebviewUri(Uri.file(path.join(resDir, 'dataTables.bootstrap4.min.js'))))}"></script>
-  <script src="${String(webview.asWebviewUri(Uri.file(path.join(resDir, 'dataTables.fixedHeader.min.js'))))}"></script>
-  <script src="${String(webview.asWebviewUri(Uri.file(path.join(resDir, 'fixedHeader.jqueryui.min.js'))))}"></script>
+  <script src="${String(webview.asWebviewUri(Uri.file(path.join(resDir, 'ag-grid-community.min.noStyle.js'))))}"></script>
+  <link href="${String(webview.asWebviewUri(Uri.file(path.join(resDir, 'ag-grid.min.css'))))}" rel="stylesheet">
+  <link href="${String(webview.asWebviewUri(Uri.file(path.join(resDir, 'ag-theme-balham.min.css'))))}" rel="stylesheet">
+  <link href="${String(webview.asWebviewUri(Uri.file(path.join(resDir, 'ag-theme-balham-dark.min.css'))))}" rel="stylesheet">
   <script>
-    var data = ${String(content)};
-    $(document).ready(function () {
-      $("#data-table").DataTable({
-        data: data.data,
-        columns: data.columns,
-        paging: false,
-        autoWidth: false,
-        order: [],
-        fixedHeader: true
+    const data = ${String(content)};
+    function updateTheme() {
+        const gridDiv = document.querySelector('#myGrid');
+        if (document.body.classList.contains('vscode-light')) {
+            gridDiv.className = 'ag-theme-balham';
+        } else {
+            gridDiv.className = 'ag-theme-balham-dark';
+        }
+    }
+    function autoSizeAll(skipHeader) {
+      var allColumnIds = [];
+      gridOptions.columnApi.getAllColumns().forEach(function (column) {
+        allColumnIds.push(column.colId);
       });
-      $("#data-table tbody").on("click", "tr", function() {
-        $(this).toggleClass("table-active");
-      });
+      gridOptions.columnApi.autoSizeColumns(allColumnIds, skipHeader);
+    }
+    const gridOptions = {
+      defaultColDef: {
+        sortable: true,
+        resizable: true,
+        filter: true,
+        filterParams: {
+          buttons: ['reset', 'apply']
+        }
+      },
+      columnDefs: data.columns,
+      rowData: data.data,
+      rowSelection: 'multiple',
+      pagination: true,
+      enableCellTextSelection: true,
+      ensureDomOrder: true,
+      onGridReady: function (params) {
+        gridOptions.api.sizeColumnsToFit();
+        autoSizeAll(false);
+      }
+    };
+    document.addEventListener('DOMContentLoaded', () => {
+      const gridDiv = document.querySelector('#myGrid');
+      new agGrid.Grid(gridDiv, gridOptions);
     });
+    function onload() {
+        updateTheme();
+        const observer = new MutationObserver(function (event) {
+            updateTheme();
+        });
+        observer.observe(document.body, {
+            attributes: true,
+            attributeFilter: ['class'],
+            childList: false,
+            characterData: false
+        });
+    }
   </script>
+</head>
+<body onload='onload()'>
+  <div id="myGrid" style="height: 100%;"></div>
 </body>
 </html>
 `;
@@ -412,11 +457,42 @@ export async function getListHtml(webview: Webview, file: string): Promise<strin
   <link href="${String(webview.asWebviewUri(Uri.file(path.join(resDir, 'jquery.json-viewer.css'))))}" rel="stylesheet">
   <style type="text/css">
     body {
-        color: black;
-        background-color: white;
+        color: var(--vscode-editor-foreground);
+        background-color: var(--vscode-editor-background);
     }
+
+    .json-document {
+        padding: 0 0;
+    }
+
     pre#json-renderer {
-      border: 1px solid #aaa;
+        font-family: var(--vscode-editor-font-family);
+        border: 0;
+    }
+
+    ul.json-dict, ol.json-array {
+        color: var(--vscode-symbolIcon-fieldForeground);
+        border-left: 1px dotted var(--vscode-editorLineNumber-foreground);
+    }
+
+    .json-literal {
+        color: var(--vscode-symbolIcon-variableForeground);
+    }
+
+    .json-string {
+        color: var(--vscode-symbolIcon-stringForeground);
+    }
+
+    a.json-toggle:before {
+        color: var(--vscode-button-secondaryBackground);
+    }
+
+    a.json-toggle:hover:before {
+        color: var(--vscode-button-secondaryHoverBackground);
+    }
+
+    a.json-placeholder {
+        color: var(--vscode-input-placeholderForeground);
     }
   </style>
   <script>
